@@ -21,7 +21,6 @@ class SmsProvider with ChangeNotifier {
 
   Future<void> fetchSms() async {
     final permission = await Permission.sms.status;
-    print('what is going on $_isDataFetched');
     if (_isDataFetched) return; // Don't refetch if data is already loaded
 
     if (!permission.isGranted) {

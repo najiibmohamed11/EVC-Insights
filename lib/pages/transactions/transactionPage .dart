@@ -1,14 +1,103 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
-import 'package:sms_reader/pages/details/userdetails.dart';
+import 'package:sms_reader/providers/ContactProvider.dart';
 import 'package:sms_reader/providers/sms_provider.dart';
-import 'dart:collection'; // To use LinkedHashMap
-import '../../widgets/transactionCard.dart'; // Import the TransactionCard widget
 import 'package:contacts_service/contacts_service.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:sms_reader/widgets/contactsTransactionList.dart';
+import 'package:sms_reader/widgets/transactionListFromSortedEntries.dart';
+import '../../utility/transaction_helpers.dart';
+import '../../widgets/transactionList.dart';
+
+class ModernSearchBar extends StatefulWidget {
+  final String hintText;
+  final ValueChanged<String>? onChanged;
+
+  const ModernSearchBar({
+    Key? key,
+    this.hintText = 'Search transactions',
+    this.onChanged,
+  }) : super(key: key);
+
+  @override
+  _ModernSearchBarState createState() => _ModernSearchBarState();
+}
+
+class _ModernSearchBarState extends State<ModernSearchBar> {
+  final FocusNode _focusNode = FocusNode();
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      setState(() {
+        _isFocused = _focusNode.hasFocus;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        color: _isFocused ? Colors.white : Colors.grey[100],
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color:
+              _isFocused ? Theme.of(context).primaryColor : Colors.grey[300]!,
+          width: 2,
+        ),
+        boxShadow: _isFocused
+            ? [
+                BoxShadow(
+                  color: Theme.of(context).primaryColor.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                )
+              ]
+            : [],
+      ),
+      child: TextField(
+        focusNode: _focusNode,
+        onChanged: widget.onChanged,
+        decoration: InputDecoration(
+          hintText: widget.hintText,
+          hintStyle: TextStyle(color: Colors.grey[400]),
+          prefixIcon: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(12),
+            child: Icon(
+              Icons.search,
+              color: _isFocused
+                  ? Theme.of(context).primaryColor
+                  : Colors.grey[400],
+            ),
+          ),
+          border: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+        style: const TextStyle(fontSize: 16),
+        cursorColor: Theme.of(context).primaryColor,
+      ),
+    );
+  }
+}
 
 class TransactionPage extends StatefulWidget {
-  const TransactionPage({super.key});
+  const TransactionPage({Key? key}) : super(key: key);
 
   @override
   State<TransactionPage> createState() => _TransactionPageState();
@@ -17,13 +106,12 @@ class TransactionPage extends StatefulWidget {
 class _TransactionPageState extends State<TransactionPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  List<Contact> contacts = [];
+  String _filterQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this); 
-    _getContactsPermission();
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -32,151 +120,160 @@ class _TransactionPageState extends State<TransactionPage>
     super.dispose();
   }
 
-  Future<void> _getContactsPermission() async {
-    PermissionStatus permissionStatus = await Permission.contacts.status;
+  void _handleSearch(String query) {
+    setState(() {
+      _filterQuery = query.toLowerCase();
+    });
+  }
 
-    if (!permissionStatus.isGranted) {
-      permissionStatus = await Permission.contacts.request();
+
+  Map<String, List<Map<String, dynamic>>> _filterTransactions(
+      Map<String, List<Map<String, dynamic>>> transactions,
+      List<Contact> contacts) {
+    if (_filterQuery.isEmpty) {
+      return transactions;
     }
+    final isPhoneNumber = RegExp(r'^\d+$')
+        .hasMatch(_filterQuery); // Check if the query is a phone number
 
-    if (permissionStatus.isGranted) {
-      _fetchContacts();
+    if (isPhoneNumber) {
+      // Switch to "All" tab and filter transactions by phone number
+      _tabController.animateTo(0);
     } else {
-      _showPermissionDeniedDialog();
+      // Switch to "Contacts" tab and filter contacts by name
+      _tabController.animateTo(2);
     }
-  }
 
-  Future<void> _fetchContacts() async {
-    try {
-      Iterable<Contact> contactsList = await ContactsService.getContacts();
+    return Map.fromEntries(transactions.entries.where((entry) {
+      String phoneNumber = entry.key;
+      List<Map<String, dynamic>> transactionList = entry.value;
 
-      setState(() {
-        contacts = contactsList.toList();
+      // Check if phone number contains the query
+      if (phoneNumber.toLowerCase().contains(_filterQuery)) {
+        return true;
+      }
+
+      // Check if any transaction contains the query in any of its fields
+      if (transactionList.any((transaction) => transaction.values.any(
+          (value) => value.toString().toLowerCase().contains(_filterQuery)))) {
+        return true;
+      }
+
+      // Check if the contact name associated with this phone number contains the query
+      bool hasMatchingContact = contacts.any((contact) {
+        return contact.phones != null &&
+            contact.phones!.any((phone) =>
+                phone.value?.toLowerCase() == phoneNumber.toLowerCase()) &&
+            contact.displayName != null &&
+            contact.displayName!.toLowerCase().contains(_filterQuery);
       });
-    } catch (e) {
-      print('Error fetching contacts: $e');
-    }
-  }
 
-  void _showPermissionDeniedDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: Text('Permission Denied'),
-        content: Text(
-            'Please allow access to contacts from the app settings to use this feature.'),
-        actions: [
-          TextButton(
-            child: Text('OK'),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-          ),
-        ],
-      ),
-    );
+      return hasMatchingContact;
+    }));
   }
 
   @override
   Widget build(BuildContext context) {
     final smsProvider = Provider.of<SmsProvider>(context);
+    final contactProvider = Provider.of<ContactProvider>(context);
 
-    // Fetch all transactions
-    // smsProvider.setFilter("All");
     List<Map<String, dynamic>> transactions = smsProvider.allFormattedMessages;
-
-    // Group transactions by phone number
     Map<String, List<Map<String, dynamic>>> groupedTransactions =
         groupTransactionsByPhoneNumber(transactions);
 
-    // Sort grouped transactions by the number of transactions for the "Most Interacted" tab
+    // Apply filter
+    Map<String, List<Map<String, dynamic>>> filteredTransactions =
+        _filterTransactions(groupedTransactions, contactProvider.contacts);
+
+
+
     List<MapEntry<String, List<Map<String, dynamic>>>>
         sortedByTransactionCount =
-        sortGroupedTransactionsByCount(groupedTransactions);
+        sortGroupedTransactionsByCount(filteredTransactions);
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
-          // Search Bar and Filter Row
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search transaction',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              IconButton(
-                icon: const Icon(Icons.filter_list, color: Colors.grey),
-                onPressed: () {},
-              ),
-            ],
+          ModernSearchBar(
+            hintText: 'Search transaction',
+            onChanged: _handleSearch,
           ),
           const SizedBox(height: 20),
-          // Tab Bar
-          // Replace the existing TabBar code with this:
-          Container( 
+          // Tab Bar (unchanged)
+          // ...
+          Container(
             decoration: BoxDecoration(
               color: Colors.grey.shade200,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Padding(
               padding: const EdgeInsets.all(4.0),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  color: Color(0xff13BC8D),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.black,
-                labelPadding: EdgeInsets.symmetric(horizontal: 16),
-                tabs: [
-                  Tab(
-                    child: Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Text('All'),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  double tabTextSize = constraints.maxWidth < 400 ? 12 : 16;
+                  double horizontalPadding =
+                      constraints.maxWidth < 400 ? 8 : 16;
+
+                  return TabBar(
+                    controller: _tabController,
+                    indicator: BoxDecoration(
+                      color: Color(0xff13BC8D),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ),
-                  Tab(
-                    child: Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Text('relative'),
-                    ),
-                  ),
-                  Tab(
-                    child: Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Text('Contacts'),
-                    ),
-                  ),
-                ],
+                    indicatorColor: Colors.transparent,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.black,
+                    labelPadding: EdgeInsets.symmetric(horizontal: 16),
+                    tabs: [
+                      Tab(
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: horizontalPadding, vertical: 8),
+                          child: Text(
+                            'All',
+                            style: TextStyle(fontSize: tabTextSize),
+                          ),
+                        ),
+                      ),
+                      Tab(
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: horizontalPadding, vertical: 8),
+                          child: Text(
+                            'Relative',
+                            style: TextStyle(fontSize: tabTextSize),
+                          ),
+                        ),
+                      ),
+                      Tab(
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: horizontalPadding, vertical: 8),
+                          child: Text(
+                            'Contacts',
+                            style: TextStyle(fontSize: tabTextSize),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
-
           const SizedBox(height: 20),
 
-          // Expanded Widget for Scrollable TabBarView content
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                // "All" Tab Content
-                transactionList(groupedTransactions),
-                // "Most Interacted" Tab Content
-                transactionListFromSortedEntries(sortedByTransactionCount),
-                contactsTransactionList(groupedTransactions),
+                TransactionList(groupedTransactions: filteredTransactions),
+                TransactionListFromSortedEntries(
+                    sortedTransactions: sortedByTransactionCount),
+                ContactsTransactionList(
+                    groupedTransactions: filteredTransactions,
+                    contacts: contactProvider.contacts),
               ],
             ),
           ),
@@ -184,206 +281,4 @@ class _TransactionPageState extends State<TransactionPage>
       ),
     );
   }
-
-  String? _getContactName(String phoneNumber) {
-    for (var contact in contacts) {
-      if (contact.phones != null) {
-        for (var phone in contact.phones!) {
-          if (phone.value != null && phone.value!.contains(phoneNumber)) {
-            return contact.displayName; // Return contact's name if matched
-          }
-        }
-      }
-    }
-    return null; // Return null if no contact found
-  }
-
-  // Function to group transactions by phoneNumber
-  Map<String, List<Map<String, dynamic>>> groupTransactionsByPhoneNumber(
-      List<Map<String, dynamic>> transactions) {
-    Map<String, List<Map<String, dynamic>>> grouped = LinkedHashMap();
-
-    for (var transaction in transactions) {
-      final phoneNumber = transaction['phoneNumber'];
-      if (grouped.containsKey(phoneNumber)) {
-        grouped[phoneNumber]!.add(transaction);
-      } else {
-        grouped[phoneNumber] = [transaction];
-      }
-    }
-
-    return grouped;
-  }
-
-  // Function to sort grouped transactions and filter for those with more than 5 transactions
-  List<MapEntry<String, List<Map<String, dynamic>>>>
-      sortGroupedTransactionsByCount(
-          Map<String, List<Map<String, dynamic>>> groupedTransactions) {
-    // Sort by the number of transactions
-    List<MapEntry<String, List<Map<String, dynamic>>>> sortedEntries =
-        groupedTransactions.entries.toList();
-
-    // Filter out entries with less than 5 transactions and sort
-    sortedEntries = sortedEntries
-        .where((entry) =>
-            entry.value.length >
-            5) // Keep only entries with more than 5 transactions
-        .toList()
-      ..sort((a, b) => b.value.length
-          .compareTo(a.value.length)); // Sort by transaction count
-
-    return sortedEntries;
-  }
-
-  // Function to display the grouped transaction list (sorted by transaction count)
-  Widget transactionListFromSortedEntries(
-      List<MapEntry<String, List<Map<String, dynamic>>>> sortedTransactions) {
-    return ListView.builder(
-      itemCount: sortedTransactions.length,
-      itemBuilder: (context, index) {
-        String phoneNumber = sortedTransactions[index].key;
-        List<Map<String, dynamic>> transactions =
-            sortedTransactions[index].value;
-
-        // Calculate total amount for this phoneNumber
-        double totalAmount = 0;
-        for (var transaction in transactions) {
-          if (transaction['type'] == 'sent') {
-            totalAmount -= transaction['amount']; // Sent: negative
-          } else {
-            totalAmount += transaction['amount']; // Received: positive
-          }
-        }
-        String name = _getContactName(phoneNumber) ?? phoneNumber;
-
-        // Determine color based on whether totalAmount is positive or negative
-        Color amountColor = totalAmount < 0 ? Colors.red : Colors.green;
-
-        return TransactionCard(
-          icon: Icons.person, // Static user icon
-          title: name,
-          time:
-              "${transactions.length} transactions", // Display number of transactions
-          amount: totalAmount.toStringAsFixed(2), // Display total amount
-          amountColor: amountColor,
-          onClick: () {
-            // Pass the transactions for the clicked phoneNumber to the Details page
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => Details(
-                    transactions: transactions,
-                    name: name), // Pass transactions
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // Function to display the grouped transaction list
-  Widget transactionList(
-      Map<String, List<Map<String, dynamic>>> groupedTransactions) {
-    return ListView.builder(
-      itemCount: groupedTransactions.keys.length,
-      itemBuilder: (context, index) {
-        String phoneNumber = groupedTransactions.keys.elementAt(index);
-        List<Map<String, dynamic>> transactions =
-            groupedTransactions[phoneNumber]!;
-
-        // Calculate total amount for this phoneNumber
-        double totalAmount = 0;
-        for (var transaction in transactions) {
-          if (transaction['type'] == 'sent') {
-            totalAmount -= transaction['amount']; // Sent: negative
-          } else {
-            totalAmount += transaction['amount']; // Received: positive
-          }
-        }
-        String name = _getContactName(phoneNumber) ?? phoneNumber;
-
-        // Determine color based on whether totalAmount is positive or negative
-        Color amountColor = totalAmount < 0 ? Colors.red : Colors.green;
-
-        return TransactionCard(
-          icon: Icons.person, // Static user icon
-          title: name,
-          time:
-              "${transactions.length} transactions", // Display number of transactions
-          amount: totalAmount.toStringAsFixed(2), // Display total amount
-          amountColor: amountColor,
-          onClick: () {
-            print('this is ..... ');
-            print(transactions);
-
-            // Pass the transactions for the clicked phoneNumber to the Details page
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => Details(
-                    transactions: transactions,
-                    name: name), // Pass transactions
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget contactsTransactionList(
-      Map<String, List<Map<String, dynamic>>> groupedTransactions) {
-    // Filter out transactions where contactName is null
-    List<String> validPhoneNumbers = groupedTransactions.keys
-        .where((phoneNumber) => _getContactName(phoneNumber) != null)
-        .toList();
-
-    return ListView.builder(
-      itemCount: validPhoneNumbers.length,
-      itemBuilder: (context, index) {
-        String phoneNumber = validPhoneNumbers[index];
-        List<Map<String, dynamic>> transactions =
-            groupedTransactions[phoneNumber]!;
-
-        // Find the contact name for this phone number
-        String? contactName = _getContactName(phoneNumber);
-        // We have already filtered, so contactName should never be null at this point.
-
-        // Calculate total amount for this phoneNumber
-        double totalAmount = 0;
-        for (var transaction in transactions) {
-          if (transaction['type'] == 'sent') {
-            totalAmount -= transaction['amount']; // Sent: negative
-          } else {
-            totalAmount += transaction['amount']; // Received: positive
-          }
-        }
-
-        // Determine color based on whether totalAmount is positive or negative
-        Color amountColor = totalAmount < 0 ? Colors.red : Colors.green;
-
-        return TransactionCard(
-          icon: Icons.person, // Static user icon
-          title: contactName!, // Use contact name (we know it's not null)
-          time: "${transactions.length} transactions", // Number of transactions
-          amount: totalAmount.toStringAsFixed(2), // Total amount
-          amountColor: amountColor,
-          onClick: () {
-            // Navigate to details page with the transactions
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => Details(
-                    transactions: transactions,
-                    name: contactName), // Pass transactions
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-// Helper function to get contact name by phone number
 }

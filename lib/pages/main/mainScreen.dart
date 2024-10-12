@@ -24,7 +24,7 @@ class _MaineScreenState extends State<MaineScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       bottomNavigationBar: CurvedNavigationBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         color: Color(0xff13BC8D),
         animationDuration: Duration(milliseconds: 300),
         items: <Widget>[

@@ -1,10 +1,11 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:pie_chart/pie_chart.dart';
 import 'package:intl/intl.dart'; // For date formatting
 
-class detailsChartWidget extends StatelessWidget {
+class DetailsChartWidget extends StatelessWidget {
   final List<Map<String, dynamic>> transactions; // Transactions list
-  detailsChartWidget({required this.transactions});
+  DetailsChartWidget({required this.transactions});
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +45,11 @@ class detailsChartWidget extends StatelessWidget {
       Colors.greenAccent,
     ];
 
+    // Round the values to 2 decimal places
+    String roundedTotalSent = totalSent.toStringAsFixed(2);
+    String roundedTotalReceived = totalReceived.toStringAsFixed(2);
+    String roundedTotalExpenses = totalExpenses.toStringAsFixed(2);
+
     return Container(
       padding: EdgeInsets.all(16),
       child: Column(
@@ -75,7 +81,7 @@ class detailsChartWidget extends StatelessWidget {
                 ],
               ),
               Text(
-                '\$$totalExpenses', // Dynamic total amount
+                '\$$roundedTotalExpenses', // Dynamic total amount (rounded)
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -87,6 +93,7 @@ class detailsChartWidget extends StatelessWidget {
           SizedBox(height: 20),
           // Pie chart
           Row(
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
               Expanded(
                 child: PieChart(
@@ -101,16 +108,14 @@ class detailsChartWidget extends StatelessWidget {
                   chartValuesOptions: ChartValuesOptions(
                     showChartValues: true,
                     showChartValuesOutside:
-                        true, // Move chart values outside the ring for better spacing
-
+                        true, // Move chart values outside the ring
                     showChartValuesInPercentage:
                         false, // Shows actual values instead of percentage
                     decimalPlaces: 1, // Limit decimal places for clarity
                     chartValueBackgroundColor: Colors
                         .grey.shade200, // Transparent background for the values
                     chartValueStyle: TextStyle(
-                      color: Colors
-                          .black, // Make text color white to stand out in the colored part
+                      color: Colors.black, // Make text color stand out
                       fontSize: 14, // Slightly smaller font for better fit
                       fontWeight: FontWeight.bold, // Keep bold for visibility
                     ),
@@ -123,51 +128,80 @@ class detailsChartWidget extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CircleAvatar(
-                        backgroundColor: Colors.redAccent,
-                        radius: 5,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Sent',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
+                      Container(
+                        padding: EdgeInsets.symmetric(vertical: 20.0),
+                        width: 8.0,
+                        height: 20.0,
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(10.0),
                         ),
+                        child: null,
+                   
                       ),
                       SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Sent',
+                            style: TextStyle(
+                                fontSize: 18.0,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.bold
+                            ),
+                          ),
+                          SizedBox(width: 8),
                       Text(
-                        '\$$totalSent', // Dynamic sent amount
+                            '\$$roundedTotalSent', // Dynamic sent amount (rounded)
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.grey,
                         ),
                       ),
+                        ],
+                      ),
+              
                     ],
                   ),
                   SizedBox(height: 12),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CircleAvatar(
-                        backgroundColor: Colors.greenAccent,
-                        radius: 5,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Received',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
+                      Container(
+                        padding: EdgeInsets.symmetric(vertical: 20.0),
+                        width: 8.0,
+                        height: 20.0,
+                        decoration: BoxDecoration(
+                          color: Colors.greenAccent,
+                          borderRadius: BorderRadius.circular(10.0),
                         ),
+                        child: null,
+                   
                       ),
                       SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Received',
+                            style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.bold
+                            ),
+                          ),
+                      SizedBox(width: 8),
                       Text(
-                        '\$$totalReceived', // Dynamic received amount
+                            '\$$roundedTotalReceived', // Dynamic received amount (rounded)
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.grey,
                         ),
+                      ),
+                        ],
                       ),
                     ],
                   ),

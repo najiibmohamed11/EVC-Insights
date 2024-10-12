@@ -3,14 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sms_reader/pages/home/home.dart';
 import 'package:sms_reader/pages/main/mainScreen.dart';
-import 'package:sms_reader/pages/transactions/transactionPage%20.dart';
 import 'package:sms_reader/providers/sms_provider.dart';
+import 'package:sms_reader/providers/ContactProvider.dart';
 
 void main() {
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SmsProvider()),
+        ChangeNotifierProvider(
+            create: (_) => ContactProvider()), 
       ],
       child: MyApp(),
     ),

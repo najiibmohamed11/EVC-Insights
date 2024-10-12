@@ -21,7 +21,7 @@ class _DetailsState extends State<Details> {
       ),
       body: Column(
         children: [
-          detailsChartWidget(transactions: widget.transactions),
+          DetailsChartWidget(transactions: widget.transactions),
           Expanded(
             child: ListView.builder(
               itemCount: widget.transactions.length,
