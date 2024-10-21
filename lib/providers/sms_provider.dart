@@ -71,24 +71,26 @@ class SmsProvider with ChangeNotifier {
     return messages.map((message) {
       final body = message.body ?? '';
       final isReceived = body.contains("waxaad \$");
+
+      // Remove commas from numbers before parsing
       final amount = double.tryParse(
-              RegExp(r'\$(\d+(\.\d+)?)').firstMatch(body)?.group(1) ?? '0') ??
-          0;
+              RegExp(r'\$(\d{1,3}(,\d{3})*(\.\d+)?)')
+                  .firstMatch(body)
+                  ?.group(0)
+                  ?.replaceAll(',', '')
+                  ?.substring(1) ?? '0') ?? 0;
+
       final phoneNumber = RegExp(r'(\d{9,})').firstMatch(body)?.group(1) ?? '';
 
-      final dateMatch = RegExp(r'Tar: (\d{2}/\d{2}/\d{2})').firstMatch(body);
-      DateTime date;
-      if (dateMatch != null) {
-        final dateString = dateMatch.group(1)!;
-        date = DateFormat('dd/MM/yy').parse(dateString);
-      } else {
-        date = message.date ?? DateTime.now();
-      }
+      // Use the SMS message's native date and time
+      final date = message.date ?? DateTime.now();
 
       final remainer = double.tryParse(
-              RegExp(r'waa \$(\d+(\.\d+)?)').firstMatch(body)?.group(1) ??
-                  '0') ??
-          0;
+              RegExp(r'waa \$(\d{1,3}(,\d{3})*(\.\d+)?)')
+                  .firstMatch(body)
+                  ?.group(0)
+                  ?.replaceAll(',', '')
+                  ?.substring(5) ?? '0') ?? 0;
 
       return {
         'type': isReceived ? 'received' : 'sent',

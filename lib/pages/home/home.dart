@@ -35,7 +35,8 @@ class _HomeState extends State<Home> with AutomaticKeepAliveClientMixin<Home> {
     // Generate labels for the last 7 days
     List<String> dateLabels = List.generate(7, (index) {
       final date = now.subtract(Duration(days: 6 - index));
-      return DateFormat('MM/dd').format(date);
+      String dayName = DateFormat('EEE').format(date);
+      return dayName;
     });
 
     // Initialize data with zeroes for all 7 days
@@ -53,13 +54,14 @@ class _HomeState extends State<Home> with AutomaticKeepAliveClientMixin<Home> {
       // Only consider messages within the past 7 days
       if (messageDate.isAfter(now.subtract(Duration(days: 7))) ||
           messageDate.isAtSameMomentAs(now.subtract(Duration(days: 7)))) {
-        String label = DateFormat('MM/dd').format(messageDate);
+        String label = DateFormat('EEE').format(messageDate);
 
         // Sum the amounts for each day
         data[label] = (data[label] ?? 0) + message['amount'];
       }
     }
 
+    print(data);
     // Generate the BarChartGroupData for each day
     return dateLabels.asMap().entries.map((entry) {
       return BarChartGroupData(
@@ -129,7 +131,6 @@ class _HomeState extends State<Home> with AutomaticKeepAliveClientMixin<Home> {
       ),
       child: Row(
         children: [
-          _buildFilterButton('All', smsProvider),
           _buildFilterButton('Sent', smsProvider),
           _buildFilterButton('Received', smsProvider),
         ],
@@ -207,7 +208,7 @@ class _HomeState extends State<Home> with AutomaticKeepAliveClientMixin<Home> {
                 getTitlesWidget: (value, meta) {
                   DateTime date = DateTime.now()
                       .subtract(Duration(days: 6 - value.toInt()));
-                  return Text(DateFormat('MM/dd').format(date),
+                  return Text(DateFormat('EEE').format(date),
                       style: TextStyle(fontSize: 10));
                 },
               ),
